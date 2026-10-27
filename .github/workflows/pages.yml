@@ -1,39 +1,58 @@
 name: Publish stock workbench
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: '20 1 * * *'  # Daily stock master refresh; GitHub may delay scheduled jobs.
-
+    # Daily company name refresh (09:20 Taipei); after-close retries 15:45, 17:15, 19:15.
+    - cron: '20 1 * * 1-5'
+    - cron: '45 7 * * 1-5'
+    - cron: '15 9 * * 1-5'
+    - cron: '15 11 * * 1-5'
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
-
 concurrency:
-  group: pages
+  group: stock-workbench-pages
   cancel-in-progress: false
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Refresh stock code/name directory
+      - name: Refresh listed/OTC/ESB directory
         run: python scripts/update_stocks.py
+      - name: Validate quote parser
+        run: python scripts/update_quotes.py --selftest
+      - name: Fetch official end-of-day quotes
+        run: python scripts/update_quotes.py
+      - name: Persist PUBLIC quote snapshots for uninterrupted trailing-stop comparisons
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/quotes_latest.json data/quotes_history.json
+          if git diff --cached --quiet; then
+            echo 'No new official quote date; no data commit required.'
+          else
+            git commit -m 'data: archive verified daily market snapshots [skip ci]'
+            git push origin HEAD:main
+          fi
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Upload website
+      - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
