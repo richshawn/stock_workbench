@@ -1,0 +1,18 @@
+[
+ {"code":"2330","name":"台積電","market":"上市","kind":"stock"},
+ {"code":"2317","name":"鴻海","market":"上市","kind":"stock"},
+ {"code":"2454","name":"聯發科","market":"上市","kind":"stock"},
+ {"code":"2881","name":"富邦金","market":"上市","kind":"stock"},
+ {"code":"2308","name":"台達電","market":"上市","kind":"stock"},
+ {"code":"2345","name":"智邦","market":"上市","kind":"stock"},
+ {"code":"3706","name":"神達","market":"上市","kind":"stock"},
+ {"code":"6669","name":"緯穎","market":"上市","kind":"stock"},
+ {"code":"3017","name":"奇鋐","market":"上市","kind":"stock"},
+ {"code":"8299","name":"群聯","market":"上櫃","kind":"stock"},
+ {"code":"8996","name":"高力","market":"上市","kind":"stock"},
+ {"code":"6515","name":"穎崴","market":"上市","kind":"stock"},
+ {"code":"0050","name":"元大台灣50","market":"上市","kind":"etf"},
+ {"code":"0056","name":"元大高股息","market":"上市","kind":"etf"},
+ {"code":"00878","name":"國泰永續高股息","market":"上市","kind":"etf"},
+ {"code":"00929","name":"復華台灣科技優息","market":"上市","kind":"etf"}
+]
