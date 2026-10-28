@@ -6,3 +6,15 @@
 @media(max-width:1200px){.stop-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.stop-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.stop-signals{grid-template-columns:1fr}.stop-metric strong{font-size:19px}.stop-tools .field{min-width:100%}.stop-tools button{flex:1}.stop-brief{padding:10px}.stop-brief strong{font-size:14px}}
 @media(max-width:640px){.stop-section{display:none}.mobile-view-detail .stop-section{display:block}.stop-section .panel-head small{font-size:10px}.stop-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* 盤後行情時效與手動請求更新狀態：延續原站深藍系。 */
+.quote-freshness{font-size:13px;font-weight:800;line-height:1.7;padding:11px 13px;border:1px solid #f0b15d;border-radius:10px;background:#fff2d9;color:#834d0f;margin:0 0 10px;overflow-wrap:anywhere}
+.quote-freshness.good{border-color:#8ed7bd;background:#eafff6;color:#075d4d}
+.quote-freshness.unknown{border-color:#a4bfd6;background:#edf5ff;color:#244b73}
+.refresh-request-note{font-size:12px;color:#305575;line-height:1.65;padding:8px 3px 10px;overflow-wrap:anywhere}
+.refresh-request-note.pending{color:#9a5707;font-weight:800}
+.refresh-request-note.error{color:#a21b34;font-weight:800}
+.refresh-request-note.success{color:#046b52;font-weight:800}
+.stop-tools #stopRequestUpdate{background:linear-gradient(105deg,#0670ce,#0aa9a3);border-color:#12a4c5}
+@media(max-width:700px){.quote-freshness{font-size:12px}.stop-tools #stopRequestUpdate{width:100%}}

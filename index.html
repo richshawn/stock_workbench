@@ -44,7 +44,9 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 <section class="light-panel stop-section" id="stopSection">
   <div class="panel-head"><h2><span class="number-badge rose">S</span>賭博式停利｜A、B 雙方案</h2><small>盤後資料 × 前日生效門檻 × 含費稅保本價</small></div>
   <div class="stop-brief"><div><strong id="stopStock">—</strong><br><span id="stopDataStatus">行情載入中</span></div><span>📌 正式出場判斷僅採已核對日期的盤後價；盤中不產生觸發。</span></div>
-  <div class="stop-tools"><label class="field"><span>策略模式（A、B 各自比較）</span><select id="stopMode"><option value="protected">獲利保護：停利門檻只升不降</option><option value="original">原始公式：每日收盤重新計算</option></select></label><button class="btn primary small" id="stopStart">建立停利基準</button><button class="btn small" id="stopClear">清除停利基準</button><button class="btn small" id="stopRefresh">↻ 刷新官方盤後價</button></div>
+  <div class="stop-tools"><label class="field"><span>策略模式（A、B 各自比較）</span><select id="stopMode"><option value="protected">獲利保護：停利門檻只升不降</option><option value="original">原始公式：每日收盤重新計算</option></select></label><button class="btn primary small" id="stopStart">建立停利基準</button><button class="btn small" id="stopClear">清除停利基準</button><button class="btn small" id="stopRefresh">↻ 重新讀取盤後資料</button><button class="btn primary small" id="stopRequestUpdate">⚡ 一鍵請求更新</button></div>
+  <div id="quoteFreshnessNotice" class="quote-freshness hide" role="status" aria-live="polite"></div>
+  <div id="refreshRequestStatus" class="refresh-request-note" role="status" aria-live="polite">「重新讀取」僅載入已發布資料；「一鍵請求更新」可透過安全服務啟動盤後抓取。</div>
   <div class="stop-metrics" id="stopCalculation"></div>
   <div class="stop-signals" id="stopSignals"></div>
   <div class="stop-note important" id="stopWarning">選擇股票後，顯示停利計算。</div>
@@ -67,6 +69,7 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 <nav class="mobile-bottom" aria-label="手機主選單"><button data-view="list" class="active"><strong>▦</strong>股票清單</button><button data-view="detail"><strong>▣</strong>持股明細</button><button data-view="calc"><strong>▥</strong>百分比表</button><button data-view="sim"><strong>▤</strong>加碼試算</button></nav>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="./excel_export.js"></script>
+<script src="./refresh_config.js"></script>
 <script src="./stop_module.js"></script>
 <script>
 'use strict';
