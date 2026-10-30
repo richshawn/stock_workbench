@@ -21,3 +21,8 @@
 .j-archive summary{cursor:pointer;font-size:13px;font-weight:700;color:#53677a}
 .j-archive .j-media{margin-top:10px}
 .j-archive .j-media-item{opacity:.83}
+
+/* V1.2 停利歷史與日期更正稽核 */
+.j-date-audit{font-size:11px;color:#365675;margin-top:5px}
+.j-date-audit p{margin:4px 0}
+.j-round td .j-outline{padding:3px 6px;margin-left:6px;font-size:11px}
