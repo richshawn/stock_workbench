@@ -43,9 +43,26 @@ function showPreview(){try{const c=parseCard($('journalPaste').value);previewCar
 function addCard(){const s=stock();if(!s||!previewCard)return notice('請先選擇股票並通過決策卡預覽。');if(s.code!==previewCard.code)return notice('股票代號不一致，不能錯貼到另一檔。');let r=targetRound(s);if(!r)r=currentRound(s,true);if(r.status==='closed'&&!confirm('目前沒有未結案交易，是否將此決策卡附加到最近的一輪已結案交易？'))return;const card={...previewCard,id:id(),roundId:r.id};db.cards.push(card);if(!save()){db.cards.pop();return notice(journalWarning);}previewCard=null;$('journalPaste').value='';$('journalPreview').textContent='尚無預覽';$('journalSaveCard').disabled=true;selectedHistory=r.id;render();notice('✅ 決策卡已保存。原始評分不會因後續股價而自動改變。');}
 function targetRound(s){const rid=$('journalTargetRound')?.value;return db.rounds.find(r=>r.id===rid&&r.stockId===s.id)||openRound(s)||roundsFor(s)[0]||null;}
 function cardsOf(r){return db.cards.filter(c=>c.roundId===r.id);}
+// 截圖採用可回復封存：即使使用者選擇更換圖片，原圖與原始時間仍保留供核對。
 function mediaOf(r){return db.media.filter(m=>m.roundId===r.id);}
+function activeMediaOf(r){return mediaOf(r).filter(m=>!m.archivedAt);}
+function mediaRow(m,archived=false){
+ const state=archived?'<strong class="j-media-archived">〔已封存〕</strong> ':'';
+ return `<div class="j-media-item">${state}<button type="button" data-view-media="${html(m.id)}" title="檢視圖片">🖼️ ${html(m.name)}</button>
+  <small>${html(m.timeframe||'週期待補')}｜${html(m.note||'無備註')}｜${html(m.createdAt.slice(0,10))}</small>
+  <span class="j-media-actions">${archived?
+   `<button type="button" class="j-outline" data-restore-media="${html(m.id)}">↩ 還原</button>`:
+   `<button type="button" class="j-outline" data-replace-media="${html(m.id)}">↻ 更換</button><button type="button" class="j-outline" data-archive-media="${html(m.id)}">封存</button>`}
+  </span></div>`;
+}
+function mediaSection(r){
+ const shown=activeMediaOf(r),old=mediaOf(r).filter(m=>!!m.archivedAt);
+ return `<h4>TradingView 截圖證據（${shown.length}）</h4>
+ <div class="j-media" data-media-for="${html(r.id)}">${shown.map(m=>mediaRow(m)).join('')||'<p class="j-empty">尚無截圖。</p>'}</div>
+ ${old.length?`<details class="j-archive"><summary>封存圖片（${old.length}）｜原圖保留於備份</summary><div class="j-media">${old.map(m=>mediaRow(m,true)).join('')}</div></details>`:''}`;
+}
 function cardHtml(c,detail=false){return `<details class="j-card" ${detail?'open':''}><summary><span>${html(c.date||c.createdAt.slice(0,10))}｜${html({buy:'買進',sell:'賣出',add:'加碼',reduce:'減碼',review:'復盤'}[c.stage]||c.stage)} · ${html(c.recordType==='retrospective'?'事後補述':'即時紀錄')}</span><b>${c.scoreTotal===null?'待評':c.scoreTotal+'/100'}</b></summary><p>${html(c.summary)}</p><div class="j-mini">${fields.map(f=>c[f]?`<p><b>${html({purpose:'交易目的',evidence:'關鍵證據',conflict:'證據分歧',risk:'風險',emotion:'當時情緒',decision:'決策依據',review:'待驗證'}[f])}：</b>${html(c[f])}</p>`:'').join('')}<p>標籤：${html(c.tags.join('、')||'—')}</p><p>評分：計畫 ${c.score.plan??'待評'}／證據 ${c.score.evidence??'待評'}／風險 ${c.score.risk??'待評'}／執行 ${c.score.execution??'待評'}</p>${c.sourceLink?`<p><a href="${html(c.sourceLink)}" target="_blank" rel="noopener noreferrer">開啟原始研究室對話</a></p>`:''}<p>建立時間：${html(c.createdAt)}</p></div></details>`;}
-function roundHtml(r){const p=position(r),cards=cardsOf(r);const events=r.events.map(e=>`<tr ${e.voided?'style="text-decoration:line-through;opacity:.62"':''}><td>${html(e.date||'原始日期未提供')}</td><td>${e.side==='buy'?'買進':'賣出'}</td><td>${amount(n(e.price))}</td><td>${Number(e.qty).toLocaleString('zh-TW')}</td><td>${e.fee===''?'待補':html(e.fee)}</td><td>${e.tax===''?'待補':html(e.tax)}</td><td>${e.voided?'已撤銷':e.source==='legacy'?'舊資料承接':'新增'}</td></tr>`).join('');return `<div class="j-round"><h3>${html(r.code)} ${html(r.name)} <small>交易輪次 ${html(r.id.slice(0,8))} · ${r.status==='closed'?'✅ 已結案':'🟢 持有中'}</small></h3><div class="j-metrics"><span>剩餘股數 <b>${p.qty}</b></span><span>持有均價 <b>${amount(p.avg)}</b></span><span>已實現價差（未扣費稅） <b>${amount(p.realizedGross)} 元</b></span><span>費稅後估算 <b>${p.feesComplete?amount(p.net)+' 元':'待補實際費稅'}</b></span></div><div class="j-scroller"><table class="j-table"><thead><tr><th>日期</th><th>類型</th><th>價格</th><th>股數</th><th>手續費</th><th>交易稅</th><th>來源</th></tr></thead><tbody>${events||'<tr><td colspan="7">尚無成交事件</td></tr>'}</tbody></table></div><h4>決策卡（${cards.length}）</h4>${cards.map(c=>cardHtml(c)).join('')||'<p class="j-empty">尚無交易決策卡。</p>'}<h4>TradingView 截圖證據（${mediaOf(r).length}）</h4><div class="j-media" data-media-for="${html(r.id)}">${mediaOf(r).map(m=>`<div class="j-media-item"><button data-view-media="${html(m.id)}">🖼️ ${html(m.name)}</button><small>${html(m.timeframe||'週期待補')}｜${html(m.note||'無備註')}｜${html(m.createdAt.slice(0,10))}</small></div>`).join('')||'<p class="j-empty">尚無截圖。</p>'}</div></div>`;}
+function roundHtml(r){const p=position(r),cards=cardsOf(r);const events=r.events.map(e=>`<tr ${e.voided?'style="text-decoration:line-through;opacity:.62"':''}><td>${html(e.date||'原始日期未提供')}</td><td>${e.side==='buy'?'買進':'賣出'}</td><td>${amount(n(e.price))}</td><td>${Number(e.qty).toLocaleString('zh-TW')}</td><td>${e.fee===''?'待補':html(e.fee)}</td><td>${e.tax===''?'待補':html(e.tax)}</td><td>${e.voided?'已撤銷':e.source==='legacy'?'舊資料承接':'新增'}</td></tr>`).join('');return `<div class="j-round"><h3>${html(r.code)} ${html(r.name)} <small>交易輪次 ${html(r.id.slice(0,8))} · ${r.status==='closed'?'✅ 已結案':'🟢 持有中'}</small></h3><div class="j-metrics"><span>剩餘股數 <b>${p.qty}</b></span><span>持有均價 <b>${amount(p.avg)}</b></span><span>已實現價差（未扣費稅） <b>${amount(p.realizedGross)} 元</b></span><span>費稅後估算 <b>${p.feesComplete?amount(p.net)+' 元':'待補實際費稅'}</b></span></div><div class="j-scroller"><table class="j-table"><thead><tr><th>日期</th><th>類型</th><th>價格</th><th>股數</th><th>手續費</th><th>交易稅</th><th>來源</th></tr></thead><tbody>${events||'<tr><td colspan="7">尚無成交事件</td></tr>'}</tbody></table></div><h4>決策卡（${cards.length}）</h4>${cards.map(c=>cardHtml(c)).join('')||'<p class="j-empty">尚無交易決策卡。</p>'}${mediaSection(r)}</div>`;}
 function renderCurrent(){const s=stock(),p=holding(),r=s?openRound(s):null;const rounds=s?roundsFor(s):[];const chooser=$('journalTargetRound');if(chooser){const old=chooser.value;chooser.innerHTML=rounds.map(x=>`<option value="${html(x.id)}">${html(x.code)}｜${html(x.id.slice(0,8))}｜${x.status==='closed'?'已結案':'持有中'}</option>`).join('')||'<option value="">尚無交易輪次</option>';if(rounds.some(x=>x.id===old))chooser.value=old;}if(!s){$('journalCurrent').innerHTML='<p class="j-empty">請先在左側股票清單選取一檔股票。</p>';return;}
  $('journalCurrent').innerHTML=`<div class="j-metrics"><span>選取股票 <b>${html(s.code)} ${html(s.name)}</b></span><span>工作台持有 <b>${p?.qty||0} 股</b></span><span>持有均價 <b>${amount(p?.avg||0)}</b></span><span>目前輪次 <b>${r?'持有中':rounds.length?'最近一輪已結案':'尚未建立'}</b></span></div>${r&&roundPositionMismatch(r,s)?'<p class="j-alert">⚠ 工作台與交易台帳持股數量或成本不一致。已暫停交易事件新增，請先保存備份並核對差異。</p>':''}${r?`<p class="j-soft">目前持股台帳與原本「分批買進」欄位連動。減碼後會以剩餘加權均價彙總顯示；完整買入批次保存於本模組的事件紀錄。</p>`:''}${rounds.map(x=>roundHtml(x)).join('')||'<p class="j-empty">沒有交易輪次。若目前有舊版持股，第一次新增賣出時會先承接原始買進資料；其原始買進日期不會被猜測。</p>'}`;
 }
@@ -57,6 +74,47 @@ let connection=null;
 function imageDB(){if(!('indexedDB'in window))return Promise.reject(Error('此瀏覽器不支援 IndexedDB'));if(connection)return connection;connection=new Promise((resolve,reject)=>{const req=indexedDB.open('stock-workbench-media-v1-preview',1);req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains('images'))d.createObjectStore('images',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});return connection;}
 async function writeImage(row){const d=await imageDB();return new Promise((resolve,reject)=>{const tx=d.transaction('images','readwrite');tx.objectStore('images').put(row);tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);});}
 async function readImage(key){const d=await imageDB();return new Promise((resolve,reject)=>{const tx=d.transaction('images','readonly'),req=tx.objectStore('images').get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
+async function removeImageBlob(key){const d=await imageDB();return new Promise((resolve,reject)=>{const tx=d.transaction('images','readwrite');tx.objectStore('images').delete(key);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});}
+function archiveMedia(mid){
+ const m=db.media.find(x=>x.id===mid);if(!m||m.archivedAt)return;
+ if(!confirm(`將「${m.name}」移到封存區？\n\n原圖仍保存在瀏覽器與完整 JSON 備份中，可以還原，不會永久刪除。`))return;
+ const archivedAt=new Date().toISOString();m.archivedAt=archivedAt;
+ if(!save()){delete m.archivedAt;return notice(journalWarning);}render();notice('✅ 圖片已移到封存區；原圖仍保留，可還原。');
+}
+function restoreMedia(mid){
+ const m=db.media.find(x=>x.id===mid);if(!m||!m.archivedAt)return;
+ if(!confirm(`將「${m.name}」還原至交易證據清單？`))return;
+ const last=m.archivedAt;delete m.archivedAt;
+ if(!save()){m.archivedAt=last;return notice(journalWarning);}render();notice('✅ 已還原封存圖片。');
+}
+function replaceMedia(mid){
+ const original=db.media.find(x=>x.id===mid);if(!original||original.archivedAt)return;
+ if(!confirm(`以新圖片替換「${original.name}」？\n\n原圖會進入封存區，連同新圖一併保存在 JSON 備份中，不會被覆蓋。`))return;
+ const picker=document.createElement('input');picker.type='file';picker.accept='image/png,image/jpeg,image/webp';picker.style.display='none';document.body.appendChild(picker);
+ picker.addEventListener('change',async()=>{
+  const file=picker.files?.[0];picker.remove();if(!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>8*1024*1024)return notice('更換失敗：只接受 PNG、JPG、WebP，單張不得超過 8 MB。');
+  // 先確認原圖仍在，避免使用不完整證據發生覆蓋。
+  try{
+   const oldBlob=await readImage(original.id);if(!oldBlob?.blob)throw Error('原圖片內容已遺失；請先由備份還原。');
+   const now=new Date().toISOString();
+   const fresh={id:id(),roundId:original.roundId,name:safeText(file.name,90),mime:file.type,size:file.size,
+    timeframe:original.timeframe||'',note:safeText(original.note||'',300),createdAt:now,replaces:original.id};
+   await writeImage({id:fresh.id,blob:file});
+   const oldArchive=original.archivedAt,oldReplace=original.replacedBy;
+   original.archivedAt=now;original.replacedBy=fresh.id;db.media.push(fresh);
+   if(!save()){
+    db.media.pop();if(oldArchive===undefined)delete original.archivedAt;else original.archivedAt=oldArchive;
+    if(oldReplace===undefined)delete original.replacedBy;else original.replacedBy=oldReplace;
+    await removeImageBlob(fresh.id).catch(()=>{});return notice(journalWarning);
+   }
+   render();notice('✅ 新圖片已保存；舊圖移入封存區，可檢視或還原。建議立即匯出備份。');
+  }catch(e){notice('更換失敗：'+e.message);}
+ },{once:true});
+ picker.click();
+ // 取消檔案選擇時各瀏覽器行為不同，暫時保留隱藏 input 直到失焦。
+ window.addEventListener('focus',()=>setTimeout(()=>{if(picker.isConnected)picker.remove();},1000),{once:true});
+}
 async function importScreenshot(){const s=stock();if(!s)return notice('請先選擇股票');const r=targetRound(s);if(!r)return notice('請先建立交易輪次，再加入截圖。');const files=Array.from($('journalImageFiles').files||[]);if(!files.length)return notice('請選擇 PNG／JPG／WebP 圖片。');if(files.length>10)return notice('一次最多上傳 10 張圖片。');const frame=safeText($('journalTimeframe').value,60),note=safeText($('journalImageNote').value,300);let success=0,fail=[];for(const f of files){if(!['image/png','image/jpeg','image/webp'].includes(f.type)||f.size>8*1024*1024){fail.push('檔案格式／大小不符：'+f.name);continue;}const m={id:id(),roundId:r.id,name:safeText(f.name,90),mime:f.type,size:f.size,timeframe:frame,note,createdAt:new Date().toISOString()};try{await writeImage({id:m.id,blob:f});db.media.push(m);success++;}catch(e){fail.push('圖片儲存失敗：'+e.message);}}if(success&&!save())notice(journalWarning);else notice(`${success?'✅ 已保存 '+success+' 張截圖在此瀏覽器。':''}${fail.length?' ⚠ '+fail.join('；'):''}${success?' 匯出 JSON 時會一併備份。':''}`);$('journalImageFiles').value='';render();}
 async function showImage(mid){const m=db.media.find(x=>x.id===mid);if(!m)return;try{const row=await readImage(mid);if(!row?.blob)throw Error('找不到圖片本體，請由含圖片備份還原。');const url=URL.createObjectURL(row.blob);const w=window.open('','_blank');if(!w){URL.revokeObjectURL(url);return notice('瀏覽器攔截新視窗，請允許本站彈出視窗。');}w.opener=null;w.document.write('<title>TradingView 截圖</title><body style="margin:0;background:#07192c;text-align:center;color:#fff"><p>'+html(m.name)+'</p><img style="max-width:100%;height:auto" src="'+url+'"></body>');w.document.close();setTimeout(()=>URL.revokeObjectURL(url),120000);}catch(e){notice(e.message);}}
 const fileToDataUrl=blob=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});
@@ -64,6 +122,9 @@ function dataUrlToBlob(data){const [meta,b64]=data.split(',');if(!/^data:image\/
 async function exportBackup(){const value=structuredClone(db);value.images=[];for(const m of db.media){const x=await readImage(m.id);if(!x?.blob)throw Error('圖片 '+m.name+' 不存在，請勿忽略遺失的證據。');value.images.push({id:m.id,dataUrl:await fileToDataUrl(x.blob)});}return value;}
 async function importBackup(value){if(!validate(value))throw Error('交易日誌備份格式不符');const copy=structuredClone(value);const imgs=Array.isArray(copy.images)?copy.images:[];if(copy.media.length&&imgs.length!==copy.media.length)throw Error('備份截圖數量不完整，匯入已取消。');for(const x of imgs){if(!copy.media.some(m=>m.id===x.id))throw Error('備份圖片 ID 無對應交易證據');const blob=dataUrlToBlob(x.dataUrl);if(blob.size>8*1024*1024)throw Error('備份圖片超過單張 8MB 限制');await writeImage({id:x.id,blob});}delete copy.images;db=copy;if(!save())throw Error('交易日誌文字儲存失敗');render();}
 function getState(){return structuredClone(db);}
-function boot(opt){api=opt;for(const t of ['current','history','research'])$('journalTab'+t).addEventListener('click',()=>{activeTab=t;render();});$('journalAddTrade').addEventListener('click',recordTrade);$('journalUndoTrade').addEventListener('click',undoLastTrade);$('journalPreviewBtn').addEventListener('click',showPreview);$('journalSaveCard').addEventListener('click',addCard);$('journalSearch').addEventListener('input',renderHistory);$('journalUpload').addEventListener('click',importScreenshot);$('journalShowBtn').addEventListener('click',showJournal);$('journalSection').addEventListener('click',e=>{const h=e.target.closest('[data-open-history]');if(h){selectedHistory=h.dataset.openHistory;renderHistory();}const m=e.target.closest('[data-view-media]');if(m)showImage(m.dataset.viewMedia);});$('journalDate').value=today();render();}
+function boot(opt){api=opt;for(const t of ['current','history','research'])$('journalTab'+t).addEventListener('click',()=>{activeTab=t;render();});$('journalAddTrade').addEventListener('click',recordTrade);$('journalUndoTrade').addEventListener('click',undoLastTrade);$('journalPreviewBtn').addEventListener('click',showPreview);$('journalSaveCard').addEventListener('click',addCard);$('journalSearch').addEventListener('input',renderHistory);$('journalUpload').addEventListener('click',importScreenshot);$('journalShowBtn').addEventListener('click',showJournal);$('journalSection').addEventListener('click',e=>{const h=e.target.closest('[data-open-history]');if(h){selectedHistory=h.dataset.openHistory;renderHistory();}const view=e.target.closest('[data-view-media]');if(view)showImage(view.dataset.viewMedia);
+ const archived=e.target.closest('[data-archive-media]');if(archived)archiveMedia(archived.dataset.archiveMedia);
+ const restored=e.target.closest('[data-restore-media]');if(restored)restoreMedia(restored.dataset.restoreMedia);
+ const replaced=e.target.closest('[data-replace-media]');if(replaced)replaceMedia(replaced.dataset.replaceMedia);});$('journalDate').value=today();render();}
 window.StockJournal={init:boot,render,exportBackup,importBackup,getState,hasActiveRound:stockId=>db.rounds.some(r=>r.stockId===stockId&&r.status==='open')};
 })();

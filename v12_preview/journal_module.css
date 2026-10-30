@@ -12,3 +12,12 @@
 .j-foot{border-top:1px solid #cbdceb;padding:10px 0 0;margin-top:8px;color:#5b7590;font-size:12px;line-height:1.7}
 @media(max-width:900px){.j-columns{grid-template-columns:1fr}}
 @media(max-width:640px){.journal-section{display:none;margin-bottom:85px}.mobile-view-journal .journal-section{display:block}.mobile-view-journal .dashboard,.mobile-view-journal .stop-section,.mobile-view-journal .calculator,.mobile-view-journal .simulators{display:none}.mobile-bottom{grid-template-columns:repeat(5,1fr)!important}.j-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.j-tab{font-size:11px;padding:10px 3px}.j-metrics span{min-width:calc(50% - 8px)}.journal-section .panel-head h2{font-size:15px}.j-fields{grid-template-columns:1fr 1fr}.j-field.wide{grid-column:1/-1}}
+
+/* V1.2 補強：TradingView 截圖更換／封存／還原，保留證據歷史 */
+.j-media-actions{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:8px;vertical-align:middle}
+.j-media-actions button{padding:5px 9px;font-size:12px}
+.j-media-archived{color:#815a26;font-size:12px}
+.j-archive{margin:9px 0;padding:9px 11px;border-radius:10px;border:1px solid #d2dfe8;background:#fbfcff}
+.j-archive summary{cursor:pointer;font-size:13px;font-weight:700;color:#53677a}
+.j-archive .j-media{margin-top:10px}
+.j-archive .j-media-item{opacity:.83}
