@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#081426">
 <meta name="description" content="台股持股管理、分批買進加權成本與漲跌百分比模擬工作台">
-<title>股價百分比計算工具｜持股工作台</title>
+<title>V1.2 股價工作台｜交易紀錄・決策卡・復盤研究</title>
 <style>
 :root{color-scheme:dark;--bg:#061021;--navy:#102846;--deep:#08182e;--slate:#193755;--line:#254766;--accent:#57b6ff;--blue:#0867e8;--green:#10d49f;--red:#ff6676;--ink:#13263c;--mute:#7894b0;--white:#f7fbff;--light:#eaf2fc;--card:#fff;--cell:#edf3fa;--radius:17px;--shadow:0 14px 36px #0003}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 10% 0%,#123b75 0%,transparent 42%),radial-gradient(ellipse at 100% 5%,#0d4051 0%,transparent 41%),linear-gradient(165deg,#07162a,#060d1b 90%);color:var(--white);font-family:Inter,"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;font-size:14px;font-variant-numeric:tabular-nums;min-height:100vh}
@@ -21,10 +21,11 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 @media print{body{background:white;color:#122a43}.shell{padding:0}.top-actions,.mobile-bottom,.btn,.watchlist .searchline,.watchlist .market-line{display:none}.dashboard{display:block}.dark-panel{box-shadow:none}.watchlist{background:white;color:#172e4a;min-height:0}.light-panel{box-shadow:none}.detail-grid{grid-template-columns:1fr 2fr 1fr}.simulator-grid{grid-template-columns:1fr}.scenario-scroller{overflow:visible}.scenario-table{min-width:0}.footnote{color:#37465a}}
 </style>
 <link rel="stylesheet" href="./stop_module.css">
+<link rel="stylesheet" href="./journal_module.css">
 </head>
 <body class="mobile-view-list">
 <div class="shell">
-<header class="topbar"><div class="brand"><div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><h1>股價百分比計算工具｜持股工作台</h1><p class="tagline">分批買進成本 × 完整百分比價位 × 越跌／越漲加碼情境</p></div></div><div class="top-actions"><span class="saving" id="saveIndicator">資料儲存於此瀏覽器</span><button class="btn primary small" id="xlsxBtn" title="將目前選定股票的持股紀錄、百分比及兩種加碼試算匯出成含公式 Excel">▤ 匯出 Excel（含公式）</button><button class="btn small" id="exportBtn">⬇ 匯出備份</button><button class="btn small" id="importBtn">⬆ 匯入備份</button><button class="btn small mobile-menu" id="quickMenu">⋯ 更多</button><input id="importFile" type="file" accept="application/json,.json" class="hide" aria-label="匯入備份檔"></div></header>
+<header class="topbar"><div class="brand"><div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><h1>V1.2｜股價工作台</h1><p class="tagline">分批買進成本 × 完整百分比價位 × 越跌／越漲加碼情境</p></div></div><div class="top-actions"><span class="saving" id="saveIndicator">正式版 V1.2｜資料儲存於本機瀏覽器</span><button class="btn primary small" id="xlsxBtn" title="將目前選定股票的持股紀錄、百分比及兩種加碼試算匯出成含公式 Excel">▤ 匯出 Excel（含公式）</button><button class="btn primary small" id="journalShowBtn">📖 交易紀錄 V1.2</button><button class="btn small" id="exportBtn">⬇ 匯出備份</button><button class="btn small" id="importBtn">⬆ 匯入備份</button><button class="btn small mobile-menu" id="quickMenu">⋯ 更多</button><input id="importFile" type="file" accept="application/json,.json" class="hide" aria-label="匯入備份檔"></div></header>
 <div class="dashboard">
  <aside class="dark-panel watchlist list-pane dashboard-panel" id="stockListSection"><div class="panel-head"><h2><span class="number-badge">1</span>股票清單 <small class="subtle" id="slotCount">0 / 10</small></h2><button id="addStockBtn" class="btn primary small">＋ 建立股票</button></div>
   <label class="sr-only" for="stockCode">輸入代號</label><div class="searchline"><input id="stockCode" class="lookup" placeholder="輸入代號，例如 2330／6515／6987" autocomplete="off" maxlength="12"><button id="lookupBtn" class="btn small">查詢</button></div>
@@ -64,17 +65,59 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
  <section class="sim-panel" id="downPanel"><div class="sim-header"><div><strong>↓ 越跌越買</strong><small>跌至指定階段逐筆加碼，並觀察回漲損益</small></div><span class="badge">風險情境</span></div><div class="sim-toolbar"><label class="field"><span>加碼階梯 %（以逗號分隔）</span><input id="downSteps" value="0,-3,-5,-10,-15,-20,-30" aria-label="下跌百分比階梯"></label><label class="field"><span>每階預計加碼股數</span><input id="downQty" type="number" min="1" step="1" inputmode="numeric" value="1000"></label></div><div class="scenario-scroller"><table class="scenario-table" id="downTable"></table></div><div class="sim-cards" id="downCards"></div><div class="scroll-hint">⇆ 表格可橫向捲動；左側「序／階段」固定顯示。</div></section>
  <section class="sim-panel" id="upPanel"><div class="sim-header up"><div><strong>↑ 越漲越買</strong><small>漲至指定階段逐筆加碼，並觀察回跌損益</small></div><span class="badge">風險情境</span></div><div class="sim-toolbar"><label class="field"><span>加碼階梯 %（以逗號分隔）</span><input id="upSteps" value="0,3,5,10,15,20,30" aria-label="上漲百分比階梯"></label><label class="field"><span>每階預計加碼股數</span><input id="upQty" type="number" min="1" step="1" inputmode="numeric" value="1000"></label></div><div class="scenario-scroller"><table class="scenario-table" id="upTable"></table></div><div class="sim-cards" id="upCards"></div><div class="scroll-hint">⇆ 表格可橫向捲動；手機版可展開各階段的回漲／回跌損益。</div></section></div>
 </section>
+<section class="light-panel journal-section" id="journalSection" aria-label="交易紀錄與決策研究">
+ <div class="panel-head"><h2>📖 V1.2｜交易紀錄・決策卡・復盤研究</h2><small>交易筆記只保存在此瀏覽器｜匯出備份可跨裝置保存</small></div>
+ <p class="j-notice">買進／賣出事件將同步更新上方持股成本。請確認交易日期、成交價及實際費稅；與舊版交易紀錄有差異時將暫停新增，以免覆蓋資料。</p><p id="journalStorageWarning" class="j-warning"></p>
+ <div class="j-tabs"><button type="button" class="j-tab active" id="journalTabcurrent">① 持股與決策</button><button type="button" class="j-tab" id="journalTabhistory">② 歷史交易庫</button><button type="button" class="j-tab" id="journalTabresearch">③ 決策研究</button></div>
+ <section id="journalPanecurrent"><div class="j-columns">
+  <div class="j-box"><h3>＋ 新增成交事件</h3><div class="j-fields">
+   <label class="j-field"><span>交易日期（台灣）</span><input id="journalDate" type="date"></label><label class="j-field"><span>買入／賣出</span><select id="journalSide"><option value="sell">賣出／減碼</option><option value="buy">買進／加碼</option></select></label>
+   <label class="j-field"><span>實際成交價格</span><input id="journalPrice" type="number" min="0.01" step="any" placeholder="例如 27.95"></label><label class="j-field"><span>成交股數（整數）</span><input id="journalQty" type="number" min="1" step="1" placeholder="例如 500"></label>
+   <label class="j-field"><span>實際手續費（元，未知留空）</span><input id="journalFee" type="number" min="0" step="any" placeholder="待交割確認"></label><label class="j-field"><span>交易稅（元，未知留空）</span><input id="journalTax" type="number" min="0" step="any" placeholder="待交割確認"></label>
+   <label class="j-field wide"><span>首次承接舊版持股的買進日期（選填，留空表示未知）</span><input id="journalBaselineDate" type="date"></label></div>
+   <p class="j-notice">首次賣出舊版持股時，會先保留原本買價與股數，再建立賣出事件；不會臆測舊買進日期。費稅未知時不顯示精確淨損益。</p><div class="j-actions"><button type="button" class="j-primary" id="journalAddTrade">✅ 記錄成交並同步持股</button><button type="button" class="j-outline" id="journalUndoTrade">↩ 撤銷最近一筆成交</button></div>
+   <p id="journalStatus" class="j-notice" role="status"></p>
+  </div>
+  <div class="j-box"><h3>🧠 貼上 ChatGPT 交易決策卡</h3><label class="j-field"><span>附加至哪一輪交易（可選已結案交易）</span><select id="journalTargetRound"></select></label><label class="j-field"><span>JSON 格式決策卡（貼上後先預覽）</span><textarea id="journalPaste" spellcheck="false" placeholder='{"schema":"trade-card-v1","stock":"1101", ...}'></textarea></label>
+   <div class="j-actions"><button type="button" class="j-outline" id="journalPreviewBtn">🔎 驗證並預覽</button><button type="button" class="j-primary" id="journalSaveCard" disabled>💾 確認保存決策卡</button></div>
+   <div id="journalPreview" class="j-preview" aria-live="polite">尚無預覽。決策評分可填 0～25，證據不足時填 null。</div>
+   <h4>📷 TradingView 證據截圖</h4><label class="j-field"><span>截圖（每張不超過 8 MB）</span><input id="journalImageFiles" type="file" accept="image/png,image/jpeg,image/webp" multiple></label>
+   <div class="j-fields"><label class="j-field"><span>指標／時間週期</span><input id="journalTimeframe" placeholder="例：30分K｜MACD(12,26,9)"></label><label class="j-field"><span>截圖說明／核對狀態</span><input id="journalImageNote" placeholder="例：2026-10-29 09:35 截圖"></label></div>
+   <div class="j-actions"><button type="button" class="j-outline" id="journalUpload">📎 儲存截圖證據</button></div><p class="j-notice">圖片保存在本機 IndexedDB，JSON 備份會連同圖片一起匯出；不要直接清除瀏覽器網站資料。</p>
+  </div>
+ </div><div class="j-box"><h3>此股交易輪次與決策摘要</h3><div id="journalCurrent"></div></div></section>
+ <section id="journalPanehistory" class="hide"><div class="j-box"><h3>📂 歷史交易檔案庫</h3><input class="j-search" id="journalSearch" placeholder="搜尋代號、股名、決策理由與標籤（跨股票）"><div id="journalHistory"></div></div><div class="j-box" id="journalHistoryDetail"></div></section>
+ <section id="journalPaneresearch" class="hide"><div class="j-box"><h3>🔎 依決策問題跨股票檢視</h3><p class="j-notice">依決策卡的 tags 自動分類；未累積足夠樣本，不顯示具有誤導性的勝率或策略效果。</p><div id="journalResearch"></div></div></section>
+ <p class="j-foot">決策評分衡量當時的證據與執行，不是交易盈虧或投資建議。事後回憶應標示「事後補述」。圖片與個人交易資料只在你的瀏覽器或自己下載的備份中保存。</p>
+</section>
+
 <footer class="footnote">計算口徑：實際持股成本＝輸入的分批買進價 × 股數總和；加碼情境在持股已建立時，0% 為原始持股、不重複買入。加碼情境損益未扣手續費與交易稅；參考股價可選擇官方盤後或手動試算，非即時行情。股票名錄由證交所／櫃買中心官方資料建置，資料異動可能有延遲；資料備份需自行保管。股票含興櫃的價格跳動採一般股票級距。</footer>
 </div>
-<nav class="mobile-bottom" aria-label="手機主選單"><button data-view="list" class="active"><strong>▦</strong>股票清單</button><button data-view="detail"><strong>▣</strong>持股明細</button><button data-view="calc"><strong>▥</strong>百分比表</button><button data-view="sim"><strong>▤</strong>加碼試算</button></nav>
+<nav class="mobile-bottom" aria-label="手機主選單"><button data-view="list" class="active"><strong>▦</strong>股票清單</button><button data-view="detail"><strong>▣</strong>持股明細</button><button data-view="calc"><strong>▥</strong>百分比表</button><button data-view="sim"><strong>▤</strong>加碼試算</button><button data-view="journal"><strong>📖</strong>交易研究</button></nav>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+
 <script src="./excel_export.js"></script>
 <script src="./refresh_config.js"></script>
+<script>
+// V1.2 安全匯入復原護欄：若上次匯入在寫入三份文字資料的中途中斷，先還原舊值再載入模組。
+(()=>{
+ const markerKey='tw-stock-workbench-import-guard-v12';
+ try{
+  const raw=localStorage.getItem(markerKey);if(!raw)return;
+  const mark=JSON.parse(raw),keys=['tw-stock-workbench-v12','tw-stock-workbench-stops-v12','tw-stock-workbench-journal-v12'];
+  if(mark?.version!==1||!mark.old||!keys.every(k=>Object.prototype.hasOwnProperty.call(mark.old,k)))throw Error('復原資訊不完整');
+  for(const k of keys){if(mark.old[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,mark.old[k]);}
+  localStorage.removeItem(markerKey);window.__v12RecoveredImport=true;
+ }catch(e){window.__v12ImportBlocked=true;alert('⚠ 上次備份匯入中斷，本機資料未能自動還原。請勿繼續操作；請保留原備份並回報：'+e.message);}
+})();
+</script>
 <script src="./stop_module.js"></script>
+<script src="./journal_module.js"></script>
 <script>
 'use strict';
 (()=>{
-const KEY='tw-stock-workbench-v2';
+const KEY='tw-stock-workbench-v12';
 const $=id=>document.getElementById(id);
 const defaults=()=>({version:2,selected:null,stocks:[],standalone:{reference:'14.76',kind:'stock',rounding:'nearest'}});
 let state=loadState(), directory=new Map(),lookupStatus='載入名錄中…',mobileTab='down', saveTimer;
@@ -93,7 +136,7 @@ const id=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():
 function seedBuys(){return Array.from({length:5},()=>({price:'',qty:''}));}
 function newStock(code,name,market,kind){return {id:id(),code,name:name||'',market:market||'待確認',kind:kind||(/^00\d{3,5}[A-Za-z]?$/.test(code)?'etf':'stock'),reference:'',rounding:'nearest',buys:seedBuys(),downSteps:'0,-3,-5,-10,-15,-20,-30',upSteps:'0,3,5,10,15,20,30',downQty:'1000',upQty:'1000',refMode:'auto'};}
 function loadState(){try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&j.version===2&&Array.isArray(j.stocks)&&j.stocks.length<=200&&typeof j.standalone==='object')return j;}catch(e){console.warn('載入本機紀錄失敗',e);}return defaults();}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveIndicator').textContent='✓ 已儲存在此瀏覽器';clearTimeout(saveTimer);saveTimer=setTimeout(()=>$('saveIndicator').textContent='資料儲存於此瀏覽器',1400);}catch(e){$('saveIndicator').textContent='⚠ 儲存失敗';toast('無法儲存。請確認瀏覽器儲存空間或無痕模式。');}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));$('saveIndicator').textContent='✓ 已儲存在此瀏覽器';clearTimeout(saveTimer);saveTimer=setTimeout(()=>$('saveIndicator').textContent='正式版 V1.2｜資料儲存於本機瀏覽器',1400);}catch(e){$('saveIndicator').textContent='⚠ 儲存失敗';toast('無法儲存。請確認瀏覽器儲存空間或無痕模式。');}}
 function current(){return state.stocks.find(s=>s.id===state.selected)||null;}
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>$('toast').classList.remove('on'),4000);}
 function holding(s){let qty=0,cost=0,incomplete=0;for(const b of s.buys){if(b.price===''&&b.qty==='')continue;const price=n(b.price),amount=n(b.qty);if(!(price>0&&Number.isInteger(amount)&&amount>0)){incomplete++;continue;}qty+=amount;cost+=price*amount;}return{qty,cost,avg:qty?cost/qty:0,incomplete};}
@@ -119,12 +162,12 @@ function updateDirectoryHint(t){lookupStatus=t;$('lookupHint').textContent=t;}
 function queryCode(){const code=$('stockCode').value.trim().toUpperCase();const found=directory.get(code);if(!code){$('stockSuggestions').textContent='';return null;} $('stockSuggestions').textContent=found?`找到：${code} ${found.name}（${found.market}），可新增。`:`${code}：目前名錄未找到；仍可新增，並自行輸入股名。`;return found;}
 function create(){const code=$('stockCode').value.trim().toUpperCase();if(!/^[0-9A-Z]{4,8}$/.test(code)){toast('請輸入 4 至 8 碼股票／ETF 代號。');return;}const match=state.stocks.find(s=>s.code.toUpperCase()===code);if(match){state.selected=match.id;save();renderAll();setView('detail');toast('這檔股票已存在，已切換到原有紀錄。');return;}if(state.stocks.length>=200){toast('此版本最多可建立 200 檔。');return;}const item=directory.get(code);const s=newStock(code,item?.name||'',item?.market||'待確認',item?.kind);state.stocks.push(s);state.selected=s.id;$('stockCode').value='';$('stockSuggestions').textContent='';save();renderAll();setView('detail');toast(`已建立 ${code}；右側已準備 5 筆空白買進欄位。`);}
 function renderList(){const tbody=$('stockRows');const rows=state.stocks.map((s,i)=>{const h=holding(s);return `<tr data-stock-id="${html(s.id)}" class="${s.id===state.selected?'selected':''}" tabindex="0" aria-label="選取 ${html(s.code)} ${html(s.name)}"><td>${i+1}</td><td><b>${html(s.code)}</b></td><td class="name">${html(s.name||'待填股名')}<span class="quote-compact">${html(window.StockStops.listQuote(s,h))}</span></td><td>${html(s.market||'—')}</td><td>${h.qty?fmt(h.qty,0):'—'}</td><td>${h.qty?fmt(h.avg):'—'}</td><td><button class="icon-btn" data-delete="${html(s.id)}" aria-label="刪除 ${html(s.code)}" title="刪除股票">×</button></td></tr>`}).join('');let blanks='';for(let i=state.stocks.length;i<Math.max(state.stocks.length,10);i++)blanks+=`<tr class="empty-slot"><td>${i+1}</td><td>—</td><td>等待新增</td><td>—</td><td>—</td><td>—</td><td></td></tr>`;tbody.innerHTML=rows+blanks;$('slotCount').textContent=`${state.stocks.length} / ${Math.max(10,state.stocks.length)}`;}
-function setView(view){if(!['list','detail','calc','sim'].includes(view))return;document.body.classList.remove('mobile-view-list','mobile-view-detail','mobile-view-calc','mobile-view-sim');document.body.classList.add('mobile-view-'+view);document.querySelectorAll('.mobile-bottom button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));window.scrollTo({top:0,behavior:'instant'});}
-function renderDetail(){const s=current();$('detailBody').classList.toggle('hide',!s);$('emptyDetail').classList.toggle('hide',!!s);$('stockHeading').textContent=s?`${s.code} ${s.name||'（股名待填）'}`:'持股明細';$('stockBadge').textContent=s?`${s.market||'待確認'}｜點選清單切換`:'';if(!s)return;
- $('stockName').value=s.name||'';$('stockKind').value=s.kind||'stock';$('referencePrice').value=s.reference??'';$('rounding').value=s.rounding||'nearest';$('refMode').value=s.refMode||'manual';$('purchaseRows').innerHTML=s.buys.map((b,i)=>`<tr><td>${i+1}</td><td><input aria-label="第${i+1}筆買進價格" data-row="${i}" data-key="price" type="number" min="0.01" step="any" inputmode="decimal" placeholder="買價" value="${html(b.price)}"></td><td><input aria-label="第${i+1}筆買進股數" data-row="${i}" data-key="qty" type="number" min="1" step="1" inputmode="numeric" placeholder="股數" value="${html(b.qty)}"></td><td class="disabled-cost" id="lineCost${i}">—</td><td><button class="icon-btn" data-row-remove="${i}" aria-label="清空第${i+1}筆">×</button></td></tr>`).join('');$('addPurchaseBtn').disabled=s.buys.length>=50;renderDetailComputed();}
+function setView(view){if(!['list','detail','calc','sim','journal'].includes(view))return;document.body.classList.remove('mobile-view-list','mobile-view-detail','mobile-view-calc','mobile-view-sim','mobile-view-journal');document.body.classList.add('mobile-view-'+view);document.querySelectorAll('.mobile-bottom button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));window.scrollTo({top:0,behavior:'instant'});}
+function renderDetail(){const s=current();$('detailBody').classList.toggle('hide',!s);$('emptyDetail').classList.toggle('hide',!!s);$('stockHeading').textContent=s?`${s.code} ${s.name||'（股名待填）'}`:'持股明細';$('stockBadge').textContent=s?`${s.market||'待確認'}｜點選清單切換`:'';if(!s)return;const journalLocked=window.StockJournal?.hasActiveRound(s.id)===true;
+ $('stockName').value=s.name||'';$('stockKind').value=s.kind||'stock';$('referencePrice').value=s.reference??'';$('rounding').value=s.rounding||'nearest';$('refMode').value=s.refMode||'manual';$('purchaseRows').innerHTML=s.buys.map((b,i)=>`<tr><td>${i+1}</td><td><input aria-label="第${i+1}筆買進價格" data-row="${i}" data-key="price" type="number" min="0.01" step="any" inputmode="decimal" placeholder="買價" value="${html(b.price)}" ${journalLocked?'disabled title="已啟用交易日誌，請在下方新增買進事件"':''}></td><td><input aria-label="第${i+1}筆買進股數" data-row="${i}" data-key="qty" type="number" min="1" step="1" inputmode="numeric" placeholder="股數" value="${html(b.qty)}" ${journalLocked?'disabled title="已啟用交易日誌，請在下方新增買進事件"':''}></td><td class="disabled-cost" id="lineCost${i}">—</td><td><button class="icon-btn" data-row-remove="${i}" ${journalLocked?'disabled':''} aria-label="清空第${i+1}筆">×</button></td></tr>`).join('');$('addPurchaseBtn').disabled=journalLocked||s.buys.length>=50;$('resetPurchaseBtn').disabled=journalLocked;renderDetailComputed();}
 function renderDetailComputed(){const s=current();if(!s)return;const h=holding(s),ref=effectiveRef(s);$('summaryStock').textContent=`${s.code} ${s.name||'待填股名'}`;$('summaryMarket').textContent=s.market||'待確認';$('summaryRef').textContent=ref>0?fmt(ref)+' 元':'尚未輸入';$('validTickNotice').textContent=ref>0&&s.rounding!=='raw'&&Math.abs(priceNeighbors(ref,s.kind).low-ref)>0.0001&&Math.abs(priceNeighbors(ref,s.kind).high-ref)>0.0001?'提醒：參考股價不在目前商品的有效跳動價位；試算值將依跳動單位修正。':'';
  $('statQty').textContent=fmt(h.qty,0)+' 股';$('statCost').textContent=money(h.cost);$('statAvg').textContent=h.qty?fmt(h.avg)+' 元':'—';$('statMarketValue').textContent=h.qty&&ref>0?money(h.qty*ref):'—';const pn=h.qty&&ref>0?h.qty*ref-h.cost:NaN;const rate=h.cost>0&&ref>0?pn/h.cost:NaN;for(const [id,value,output]of [['statPnL',pn,money(pn)],['statReturn',rate,pct(rate)]]){const el=$(id);el.textContent=output;el.className=pcls(value);}
- $('purchaseWarning').textContent=h.incomplete?`有 ${h.incomplete} 筆買進紀錄尚未同時填妥「正數價格」及「正整數股數」，暫不計入持股成本。`:'實際交易紀錄與下方模擬加碼分開保存；不含手續費與交易稅。';
+ $('purchaseWarning').textContent=window.StockJournal?.hasActiveRound(s.id)?'目前有 V1.2 進行中的交易輪次，分批買進欄位轉為唯讀持股摘要；新增買賣請使用下方「交易紀錄 V1.2」。':h.incomplete?`有 ${h.incomplete} 筆買進紀錄尚未同時填妥「正數價格」及「正整數股數」，暫不計入持股成本。`:'實際交易紀錄與下方模擬加碼分開保存；不含手續費與交易稅。';
  s.buys.forEach((b,i)=>{const el=$('lineCost'+i),price=n(b.price),qty=n(b.qty);if(el)el.textContent=price>0&&Number.isInteger(qty)&&qty>0?money(price*qty):'—';});}
 function effectiveRef(s){const q=window.StockStops.quote(s);return s.refMode==='auto'&&q?Number(q.price):n(s.reference);}
 function calcContext(){const s=current();return s?{price:effectiveRef(s),kind:s.kind,rounding:s.rounding,stock:s}: {price:n(state.standalone.reference),kind:state.standalone.kind,rounding:state.standalone.rounding,stock:null};}
@@ -140,11 +183,66 @@ function renderSim(){const c=calcContext(),valid=!!c.stock&&c.price>0;$('simGrid
 function applySimTab(){document.querySelectorAll('[data-simtab]').forEach(b=>b.classList.toggle('active',b.dataset.simtab===mobileTab));for(const side of ['down','up'])$(side+'Panel').classList.toggle('mobile-hide',side!==mobileTab);}
 function renderComputed(){renderList();renderDetailComputed();renderPercent();renderSim();renderStops();}
 function renderStops(){const s=current();window.StockStops.render(s,s?holding(s):null);}
-function renderAll(){renderList();renderDetail();renderPercent();renderSim();renderStops();queryCode();}
+function renderAll(){renderList();renderDetail();renderPercent();renderSim();renderStops();queryCode();window.StockJournal?.render();}
 function exportBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
-function exportBackup(){const stamp=new Date().toLocaleDateString('sv-SE');exportBlob(new Blob([JSON.stringify({...state,stopSettings:window.StockStops.exportState(),exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),`持股工作台_備份_${stamp}.json`);toast('已匯出 JSON 備份。請妥善保管交易資料。');}
+async function exportBackup(){const journal=await window.StockJournal.exportBackup();const stamp=new Date().toLocaleDateString('sv-SE');exportBlob(new Blob([JSON.stringify({...state,stopSettings:window.StockStops.exportState(),tradeJournal:journal,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),`持股工作台_備份_${stamp}.json`);toast('已匯出 JSON 備份。請妥善保管交易資料。');}
 function exportCsv(){const row=(items)=>items.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',');const lines=[row(['代號','股名','市場','商品類型','累積股數','持有總成本','加權均價','參考股價','帳面損益','損益率'])];for(const s of state.stocks){const h=holding(s),ref=n(s.reference),pnl=h.qty&&ref>0?h.qty*ref-h.cost:'';lines.push(row([s.code,s.name,s.market,s.kind,h.qty,h.cost,h.avg||'',s.reference,pnl,h.cost&&pnl!==''?pnl/h.cost:'']));}exportBlob(new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),'持股清單.csv');}
-function importBackup(file){if(!file)return;if(file.size>5e6){toast('備份檔太大，請確認檔案。');return;}file.text().then(t=>{let j;try{j=JSON.parse(t);}catch{throw Error('JSON 格式錯誤');}if(!j||j.version!==2||!Array.isArray(j.stocks)||j.stocks.length>200||!j.standalone||typeof j.standalone!=='object')throw Error('不是本工具的 v2 備份檔');if(!j.stocks.every(s=>s&&typeof s.code==='string'&&Array.isArray(s.buys)&&s.buys.length<=50&&typeof s.id==='string'))throw Error('交易紀錄結構不符');if(!confirm(`將以備份中的 ${j.stocks.length} 檔股票覆蓋目前資料，確定匯入？（建議先匯出原資料）`))return;state={version:2,selected:j.selected,stocks:j.stocks,standalone:j.standalone};if(j.stopSettings)window.StockStops.importState(j.stopSettings);if(!current())state.selected=state.stocks[0]?.id||null;save();renderAll();toast('備份已匯入，股票及交易紀錄已恢復。');}).catch(e=>toast('匯入失敗：'+e.message)).finally(()=>$('importFile').value='');}
+// 完整預檢 → 將圖片寫入新的 ID → 保存復原標記 → 提交三組文字資料 → 解除標記。
+// 不會覆蓋任何既有圖片。中斷重開時，由模組載入前的復原護欄還原舊文字資料。
+let importBusy=false;
+async function importBackup(file){
+ if(!file||importBusy)return;
+ const markerKey='tw-stock-workbench-import-guard-v12';
+ const mainKey=KEY,stopKey='tw-stock-workbench-stops-v12',journalKey='tw-stock-workbench-journal-v12';
+ const keys=[mainKey,stopKey,journalKey];
+ let markSaved=false,oldValues=null,oldMemory=null;
+ function restoreOld(){
+  if(!oldValues)return;
+  for(const k of keys){if(oldValues[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,oldValues[k]);}
+  localStorage.removeItem(markerKey);markSaved=false;
+  if(oldMemory){state=oldMemory.main;window.StockStops.applyPreparedState(oldMemory.stops);window.StockJournal.installPreparedImport(oldMemory.journal);renderAll();}
+ }
+ importBusy=true;
+ try{
+  if(window.__v12ImportBlocked||localStorage.getItem(markerKey))throw Error('先前匯入尚未復原，請先處理復原警示');
+  if(file.size>150e6)throw Error('備份檔超過 150 MB 上限');
+  let j;try{j=JSON.parse(await file.text());}catch{throw Error('JSON 格式錯誤');}
+  if(!j||j.version!==2||!Array.isArray(j.stocks)||j.stocks.length>200||!j.standalone||typeof j.standalone!=='object'||Array.isArray(j.standalone))throw Error('不是本工具的 v2 備份檔');
+  if(!j.stocks.every(s=>s&&typeof s.code==='string'&&typeof s.id==='string'&&Array.isArray(s.buys)&&s.buys.length<=50))throw Error('持股資料結構不符');
+  if(new Set(j.stocks.map(s=>s.id)).size!==j.stocks.length)throw Error('股票 ID 重複');
+  const priorJournal=window.StockJournal.getState();
+  if(!j.tradeJournal&&(priorJournal.rounds.length||priorJournal.cards.length||priorJournal.media.length))throw Error('舊版備份缺少交易台帳，但目前已有 V1.2 歷史資料。請在空白測試環境匯入；原資料未改變。');
+  if(j.stopSettings!==undefined&&(!j.stopSettings||typeof j.stopSettings!=='object'||Array.isArray(j.stopSettings)))throw Error('停利設定格式不正確');
+  const nextMain={version:2,selected:j.selected,stocks:j.stocks,standalone:j.standalone};
+  if(!nextMain.stocks.some(s=>s.id===nextMain.selected))nextMain.selected=nextMain.stocks[0]?.id||null;
+  const nextStops=j.stopSettings||{};
+  const nextJournal=j.tradeJournal?window.StockJournal.prepareBackupImport(j.tradeJournal):
+   {journal:{version:1,rounds:[],cards:[],media:[]},images:[]};
+  // 預先序列化，避免真正寫入到一半才發現資料格式或容量問題。
+  const nextRaw={
+   [mainKey]:JSON.stringify(nextMain),
+   [stopKey]:JSON.stringify(nextStops),
+   [journalKey]:JSON.stringify(nextJournal.journal)
+  };
+  if(!confirm(`安全匯入檢查通過：${nextMain.stocks.length} 檔股票、${nextJournal.journal.rounds.length} 輪交易、${nextJournal.images.length} 張圖片。\n\n匯入會取代目前 V1.2 的持股、停利設定及交易台帳。已先另存 JSON 備份嗎？`))return;
+  oldValues=Object.fromEntries(keys.map(k=>[k,localStorage.getItem(k)]));
+  oldMemory={main:state,stops:window.StockStops.exportState(),journal:priorJournal};
+  // 新圖使用新 ID，一張失敗則整批圖片都不寫入；舊圖不會被覆蓋。
+  await window.StockJournal.storePreparedImages(nextJournal.images);
+  // 備份原有文字資料供重新整理後自動恢復；容量不足便中止，不覆蓋任何原文字資料。
+  localStorage.setItem(markerKey,JSON.stringify({version:1,old:oldValues}));markSaved=true;
+  for(const k of keys)localStorage.setItem(k,nextRaw[k]);
+  state=nextMain;
+  window.StockStops.applyPreparedState(nextStops);
+  window.StockJournal.installPreparedImport(nextJournal.journal);
+  renderAll();
+  localStorage.removeItem(markerKey);markSaved=false;
+  toast('✅ 安全匯入完成；請核對股數、停利基準、交易歷史及圖片。');
+ }catch(e){
+  if(markSaved){try{restoreOld();}catch(recoveryError){window.__v12ImportBlocked=true;alert('⚠ 回復失敗，請先重新整理網頁讓安全護欄復原；勿再輸入交易。'+recoveryError.message);return;}}
+  alert('⚠ 匯入未完成：'+e.message+'。既有交易資料未被取代；請保留備份。');
+ }finally{importBusy=false;$('importFile').value='';}
+}
 function loadDemo(){if(state.stocks.length&&!confirm('示範資料會新增一檔 2330（不覆蓋現有股票）。繼續？'))return;const prior=state.stocks.find(s=>s.code==='2330');if(prior){state.selected=prior.id;renderAll();setView('detail');toast('已切換現有 2330，不會覆蓋你的資料。');return;}const s=newStock('2330','台積電','上市','stock');s.reference='1025';s.buys=[{price:'900',qty:'1000'},{price:'920',qty:'500'},{price:'950',qty:'500'},{price:'980',qty:'500'},{price:'1000',qty:'500'}];state.stocks.push(s);state.selected=s.id;save();renderAll();setView('detail');toast('已載入示範：持股 3,000 股、成本 2,825,000 元、均價 941.67 元。');}
 $('addStockBtn').addEventListener('click',create);$('lookupBtn').addEventListener('click',()=>{const found=queryCode();if(found)toast(`${found.code} ${found.name}（${found.market}）`);else toast('目前無法辨識股名，可先新增代號，再在右側手動輸入股名。');});$('stockCode').addEventListener('input',queryCode);$('stockCode').addEventListener('keydown',e=>{if(e.key==='Enter')create();});
 $('stockRows').addEventListener('click',e=>{const del=e.target.closest('[data-delete]');if(del){e.stopPropagation();const s=state.stocks.find(x=>x.id===del.dataset.delete);if(!s)return;if(!confirm(`刪除 ${s.code} ${s.name||''}，包含全部交易紀錄？（建議先匯出備份）`))return;state.stocks=state.stocks.filter(x=>x.id!==s.id);if(state.selected===s.id)state.selected=state.stocks[0]?.id||null;save();renderAll();return;}const tr=e.target.closest('[data-stock-id]');if(!tr)return;state.selected=tr.dataset.stockId;save();renderAll();setView('detail');});$('stockRows').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr[data-stock-id]')){e.preventDefault();e.target.click();}});
@@ -152,17 +250,18 @@ $('stockName').addEventListener('input',e=>{const s=current();if(!s)return;s.nam
 $('stockKind').addEventListener('change',e=>{const s=current();if(!s)return;s.kind=e.target.value;save();renderComputed();});
 $('refMode').addEventListener('change',e=>{const s=current();if(!s)return;s.refMode=e.target.value;save();renderComputed();});
 $('referencePrice').addEventListener('input',e=>{const s=current();if(!s)return;s.reference=e.target.value;save();renderComputed();});$('rounding').addEventListener('change',e=>{const s=current();if(!s)return;s.rounding=e.target.value;save();renderComputed();});
-$('purchaseRows').addEventListener('input',e=>{const el=e.target;if(!el.matches('[data-key]'))return;const s=current();if(!s)return;const i=Number(el.dataset.row);if(!s.buys[i])return;s.buys[i][el.dataset.key]=el.value;save();renderComputed();});
+$('purchaseRows').addEventListener('input',e=>{const el=e.target;if(!el.matches('[data-key]'))return;const s=current();if(!s)return;if(window.StockJournal?.hasActiveRound(s.id)){toast('已啟用 V1.2 交易台帳，請由交易日誌新增成交。');renderDetail();return;}const i=Number(el.dataset.row);if(!s.buys[i])return;s.buys[i][el.dataset.key]=el.value;save();renderComputed();});
 $('purchaseRows').addEventListener('click',e=>{const btn=e.target.closest('[data-row-remove]');if(!btn)return;const s=current();if(!s)return;const i=Number(btn.dataset.rowRemove);s.buys[i]={price:'',qty:''};save();renderDetail();renderComputed();});
 $('addPurchaseBtn').addEventListener('click',()=>{const s=current();if(!s||s.buys.length>=50)return;s.buys.push({price:'',qty:''});save();renderAll();});$('resetPurchaseBtn').addEventListener('click',()=>{const s=current();if(!s||!confirm('要清空這檔股票的所有買進紀錄嗎？此操作無法復原（除非已有備份）。'))return;s.buys=seedBuys();save();renderAll();});
 for(const side of ['down','up']){for(const suffix of ['Steps','Qty'])$(side+suffix).addEventListener('input',e=>{const s=current();if(!s)return;s[side+suffix]=e.target.value;save();const c=calcContext();if(c.price>0)renderScenarioTable(side,buildScenario(c,side));});}
 for(const [id,key]of [['standalonePrice','reference'],['standaloneKind','kind'],['standaloneRounding','rounding']])$(id).addEventListener('input',e=>{state.standalone[key]=e.target.value;save();renderPercent();});
 function exportSelectedExcel(){const s=current();if(!s){toast('請先從股票清單選取一檔股票再匯出 Excel。');return;}try{if(!window.StockWorkbenchExcel)throw Error('缺少 excel_export.js，請確認完整專案檔案');const filename=window.StockWorkbenchExcel.download({...s,reference:String(effectiveRef(s)||'')});toast('已匯出 Excel（含公式）：'+filename+'。修改黃色輸入欄位即可連動。');}catch(e){console.error('匯出 Excel 失敗',e);toast('Excel 匯出失敗：'+e.message);}}
 ['xlsxBtn','xlsxListBtn','xlsxDetailBtn'].forEach(id=>$(id).addEventListener('click',exportSelectedExcel));
-$('exportBtn').addEventListener('click',exportBackup);$('importBtn').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',e=>importBackup(e.target.files?.[0]));$('csvBtn').addEventListener('click',exportCsv);$('demoBtn').addEventListener('click',loadDemo);$('gotoListBtn').addEventListener('click',()=>setView('list'));
-$('quickMenu').addEventListener('click',()=>{const cmd=prompt('手機功能：1 匯出 JSON 備份、2 匯入 JSON 備份、3 匯出 CSV、4 匯出選定股票 Excel（含公式）、5 查看股票清單');if(cmd==='1')exportBackup();if(cmd==='2')$('importFile').click();if(cmd==='3')exportCsv();if(cmd==='4')exportSelectedExcel();if(cmd==='5')setView('list');});
+$('exportBtn').addEventListener('click',()=>exportBackup().catch(e=>alert('備份失敗：'+e.message+'。請勿清除瀏覽器資料。')));$('importBtn').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',e=>importBackup(e.target.files?.[0]));$('csvBtn').addEventListener('click',exportCsv);$('demoBtn').addEventListener('click',loadDemo);$('gotoListBtn').addEventListener('click',()=>setView('list'));
+$('quickMenu').addEventListener('click',()=>{const cmd=prompt('手機功能：1 匯出 JSON 備份、2 匯入 JSON 備份、3 匯出 CSV、4 匯出選定股票 Excel（含公式）、5 查看股票清單、6 交易日誌');if(cmd==='1')exportBackup().catch(e=>alert('備份失敗：'+e.message));if(cmd==='2')$('importFile').click();if(cmd==='3')exportCsv();if(cmd==='4')exportSelectedExcel();if(cmd==='5')setView('list');if(cmd==='6')setView('journal');});
 document.querySelectorAll('.mobile-bottom button').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));document.querySelectorAll('[data-simtab]').forEach(b=>b.addEventListener('click',()=>{mobileTab=b.dataset.simtab;applySimTab();}));
 window.StockStops.init(()=>{renderComputed();},()=>current(),()=>{const s=current();return s?holding(s):null;},()=>renderStops());
+window.StockJournal.init({getSelected:()=>current(),getHolding:()=>{const s=current();return s?holding(s):null;},onPositionChanged:()=>{save();renderAll();}});
 mergeDirectory(embedded.map(([code,name,market])=>({code,name,market,kind:code.startsWith('00')?'etf':'stock'})),'內建');renderAll();loadDirectory();
 })();
 </script>

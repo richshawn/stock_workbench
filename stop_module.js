@@ -1,7 +1,7 @@
 /* Public EOD quotes and private browser-local stop strategy. No intraday API. */
 (function(){
 'use strict';
-const LS='tw-stock-workbench-stops-v1';
+const LS='tw-stock-workbench-stops-v12';
 const $=id=>document.getElementById(id);
 const fmt=(n,d=2)=>Number.isFinite(n)?Number(n).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -9,7 +9,7 @@ const valid=x=>Number.isFinite(Number(x))&&Number(x)>0;
 const toNum=x=>valid(x)?Number(x):NaN;
 const key=s=>(s.market==='興櫃'?'興櫃':s.market==='上櫃'?'上櫃':'上市')+':'+String(s.code||'').trim().toUpperCase();
 let latest={version:1,items:{}},hist={version:1,series:{}},loadMessage='盤後行情尚未載入',updateCallback=null,settings={};
-const SCHEDULE_KEY='stock-workbench-last-update-key-v112';
+const SCHEDULE_KEY='stock-workbench-last-update-key-v12';
 let refreshPending=false;
 // 台北時間判斷；不臆測交易所休市日。開盤日可能因休市／個股停牌而缺少新資料。
 function taipeiNow(){
@@ -71,6 +71,39 @@ function compute(s,h,p){const q=quote(s),avg=h.qty?h.cost/h.qty:NaN,candidate=q&
  if(info.previousCheckedDate!==q.tradeDate)info.problem='行情歷史與最新資料日期不一致，僅供觀察。';
  return info;
 }
+/* V1.2 回溯停利快照：只計算成交日以前、目前本機已收錄的盤後資料。
+   這是事後重建，不是成交當時就已存在的不可變證據。 */
+function snapshotAt(s,h,tradeDate){
+ const p=params(s),a=p.anchor;
+ if(!a)return null;
+ const snap={schema:'stop-audit-v1',capturedAt:new Date().toISOString(),tradeDate,
+   source:'以備份中的基準及目前可讀的盤後歷史回溯重算；非當時原始警示證據',
+   retrospective:tradeDate<taipeiNow().date,mode:p.mode,anchor:structuredClone(a),
+   cost:h?.cost??null,qty:h?.qty??null,dataUpdatedAt:latest.updatedAt||'',
+   status:'unverified',coverage:'',observedThrough:'',A:null,B:null};
+ if(!h?.qty||a.code!==s.code||a.market!==s.market||a.qty!==h.qty||Math.abs(a.cost-h.cost)>.0001){
+   snap.coverage='基準與結案前持股不同，不能重建觸發';return snap;
+ }
+ if(a.date>tradeDate){snap.coverage='原基準日期晚於成交日，無法回溯';return snap;}
+ const rows=seriesFor(s).filter(([d])=>d>=a.date&&d<=tradeDate);
+ if(!rows.some(([d])=>d===a.date)){snap.coverage='本機缺少基準日行情，觸發狀態待核';return snap;}
+ const v=stops(h.cost/h.qty,Number(a.price),s.kind),states={
+  A:{threshold:v.ea,triggered:false,triggerDate:'',triggerClose:null,triggerThreshold:null},
+  B:{threshold:v.eb,triggered:false,triggerDate:'',triggerClose:null,triggerThreshold:null}};
+ for(const [date,close] of rows){
+  if(date===a.date)continue;
+  const next=stops(h.cost/h.qty,close,s.kind);
+  for(const type of ['A','B']){
+   const rec=states[type];if(rec.triggered)continue;
+   if(close+1e-8<rec.threshold){rec.triggered=true;rec.triggerDate=date;rec.triggerClose=close;rec.triggerThreshold=rec.threshold;}
+   else rec.threshold=p.mode==='protected'?Math.max(rec.threshold,type==='A'?next.ea:next.eb):(type==='A'?next.ea:next.eb);
+  }
+ }
+ snap.status='reconstructed';snap.A=states.A;snap.B=states.B;
+ snap.observedThrough=rows.at(-1)[0];
+ snap.coverage=(snap.observedThrough<tradeDate?'行情截至成交日未完全涵蓋；':'回溯計算至成交日；')+'無法排除中間交易日資料缺漏';
+ return snap;
+}
 function priceLabel(q){return q?.quoteType==='daily_average'?'成交均價':'正式收盤價';}
 function warningStatus(obj,q){if(!obj)return '尚未建立';if(obj.triggered)return q?.quoteType==='daily_average'?`${obj.triggerDate} 成交均價跌破，需人工確認`:`${obj.triggerDate} 收盤確認跌破，下一交易日提示出場`;
  return q?.quoteType==='daily_average'?'以成交均價觀察（需人工判斷可成交價）':'續抱／未觸發';}
@@ -107,7 +140,7 @@ function render(s,h){const panel=$('stopSection');if(!panel)return;panel.classLi
 }
 function listQuote(s,h){const q=quote(s);if(!q)return '盤後價：尚未取得';const price=`${fmt(Number(q.price))} 元｜${q.tradeDate} ${q.quoteType==='daily_average'?'成交均價':'收盤'}`;if(!h||!h.qty)return price;const v=stops(h.cost/h.qty,Number(q.price),s.kind);return `${price}｜A ${fmt(v.ea)}／B ${fmt(v.eb)}`;}
 async function load(force=false){loadMessage='更新盤後快照中…';const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),13000);
- try{const qs=force?`?t=${Date.now()}`:'';const [x,y]=await Promise.all(['./data/quotes_latest.json','./data/quotes_history.json'].map(async src=>{const resp=await fetch(src+qs,{cache:'no-store',signal:controller.signal});if(!resp.ok)throw Error('HTTP '+resp.status);return resp.json()}));if(!x?.items||!y?.series)throw Error('資料檔結構不完整');latest=x;hist=y;loadMessage=x.updatedAt?'已載入官方盤後快照；不同市場更新可能不同步':'等待第一次盤後同步';}
+ try{const qs=force?`?t=${Date.now()}`:'';const [x,y]=await Promise.all(['../data/quotes_latest.json','../data/quotes_history.json'].map(async src=>{const resp=await fetch(src+qs,{cache:'no-store',signal:controller.signal});if(!resp.ok)throw Error('HTTP '+resp.status);return resp.json()}));if(!x?.items||!y?.series)throw Error('資料檔結構不完整');latest=x;hist=y;loadMessage=x.updatedAt?'已載入官方盤後快照；不同市場更新可能不同步':'等待第一次盤後同步';}
  catch(e){loadMessage='盤後來源暫不可用；不進行停利觸發';console.warn('Official EOD unavailable',e);}
  finally{clearTimeout(timeout);if(updateCallback)updateCallback();}
 }
@@ -153,5 +186,5 @@ function bind(){const mode=$('stopMode');mode.addEventListener('change',e=>{cons
  $('stopStart').addEventListener('click',()=>{const s=window.StockStops.getSelected?.(),h=window.StockStops.getHolding?.();if(!s||!h?.qty)return alert('請先建立持股成本。');const q=quote(s);if(!q)return alert('尚無帶資料日期的官方盤後價格，無法建立停利基準。');const f=freshness(s);if(f.stale)return alert('今日行情尚未同步（或市場休市），不能用過期行情建立新的停利基準。請確認最新交易日後再試。');const p=params(s);if(p.anchor&&!confirm('重新建立會清除這檔股票先前的停利追蹤紀錄，確定？'))return;p.anchor={code:s.code,market:s.market,date:q.tradeDate,price:Number(q.price),qty:h.qty,cost:h.cost};save();window.StockStops.renderSelected?.();});
  $('stopClear').addEventListener('click',()=>{const s=window.StockStops.getSelected?.();if(!s)return;if(!confirm('清除這檔股票的停利基準與觸發紀錄？交易紀錄不會受影響。'))return;params(s).anchor=null;save();window.StockStops.renderSelected?.();});
 }
-window.StockStops={exportState:()=>JSON.parse(JSON.stringify(settings)),importState:(data)=>{if(data&&typeof data==='object'&&!Array.isArray(data)){settings=data;save();}},init(callback,getSelected,getHolding,renderSelected){updateCallback=callback;this.getSelected=getSelected;this.getHolding=getHolding;this.renderSelected=renderSelected;bind();load();},quote,listQuote,render,compute,ceilTick,stops,breakeven,seriesFor,load};
+window.StockStops={snapshotAt,applyPreparedState:(data)=>{settings=structuredClone(data);},exportState:()=>JSON.parse(JSON.stringify(settings)),importState:(data)=>{if(data&&typeof data==='object'&&!Array.isArray(data)){settings=data;save();}},init(callback,getSelected,getHolding,renderSelected){updateCallback=callback;this.getSelected=getSelected;this.getHolding=getHolding;this.renderSelected=renderSelected;bind();load();},quote,listQuote,render,compute,ceilTick,stops,breakeven,seriesFor,load};
 })();
