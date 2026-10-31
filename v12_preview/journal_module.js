@@ -159,11 +159,65 @@ async function showImage(mid){const m=db.media.find(x=>x.id===mid);if(!m)return;
 const fileToDataUrl=blob=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error);r.readAsDataURL(blob);});
 function dataUrlToBlob(data){const [meta,b64]=data.split(',');if(!/^data:image\/(png|jpeg|webp);base64$/.test(meta)||!b64)throw Error('備份圖片格式錯誤');const bin=atob(b64),bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new Blob([bytes],{type:meta.slice(5,-7)});}
 async function exportBackup(){const value=structuredClone(db);value.images=[];for(const m of db.media){const x=await readImage(m.id);if(!x?.blob)throw Error('圖片 '+m.name+' 不存在，請勿忽略遺失的證據。');value.images.push({id:m.id,dataUrl:await fileToDataUrl(x.blob)});}return value;}
-async function importBackup(value){if(!validate(value))throw Error('交易日誌備份格式不符');const copy=structuredClone(value);const imgs=Array.isArray(copy.images)?copy.images:[];if(copy.media.length&&imgs.length!==copy.media.length)throw Error('備份截圖數量不完整，匯入已取消。');for(const x of imgs){if(!copy.media.some(m=>m.id===x.id))throw Error('備份圖片 ID 無對應交易證據');const blob=dataUrlToBlob(x.dataUrl);if(blob.size>8*1024*1024)throw Error('備份圖片超過單張 8MB 限制');await writeImage({id:x.id,blob});}delete copy.images;db=copy;if(!save())throw Error('交易日誌文字儲存失敗');render();}
+// 安全匯入（預檢）：全面核對圖片及引用；所有匯入圖片改用新 ID，避免覆蓋現有證據。
+function prepareBackupImport(value){
+ if(!validate(value))throw Error('交易日誌備份格式不符');
+ const metadata=Array.isArray(value.media)?value.media:[];
+ const src=Array.isArray(value.images)?value.images:[];
+ if(metadata.length!==src.length)throw Error('備份圖片數量與圖片清單不一致，未匯入任何資料。');
+ const refs=new Set(),idMap=new Map(),rounds=new Set();
+ for(const r of value.rounds){
+  if(!r||typeof r.id!=='string'||rounds.has(r.id)||!Array.isArray(r.events))throw Error('交易輪次結構或 ID 重複');
+  rounds.add(r.id);
+ }
+ for(const m of metadata){
+  if(!m||typeof m.id!=='string'||refs.has(m.id)||!rounds.has(m.roundId))throw Error('圖片 ID 重複或交易輪次引用錯誤');
+  refs.add(m.id);idMap.set(m.id,id());
+ }
+ const incoming=new Set(),pictures=[];
+ for(const img of src){
+  if(!img||typeof img.id!=='string'||!refs.has(img.id)||incoming.has(img.id))throw Error('備份圖片缺漏、ID 不符或重複');
+  incoming.add(img.id);
+  if(typeof img.dataUrl!=='string'||img.dataUrl.length>Math.ceil(8*1024*1024*4/3)+120)throw Error('圖片資料超過單張 8 MB 上限');
+  const blob=dataUrlToBlob(img.dataUrl);
+  const meta=metadata.find(m=>m.id===img.id);
+  if(blob.size<1||blob.size>8*1024*1024||blob.type!==meta.mime||(Number.isFinite(meta.size)&&blob.size!==meta.size))throw Error('圖片大小或 MIME 與備份清單不一致');
+  pictures.push({id:idMap.get(img.id),blob});
+ }
+ const clean={...value,media:metadata.map(m=>({...m,id:idMap.get(m.id),
+  ...(m.replaces?{replaces:idMap.get(m.replaces)||m.replaces}:{}),
+  ...(m.replacedBy?{replacedBy:idMap.get(m.replacedBy)||m.replacedBy}:{})}))};
+ delete clean.images;
+ // 經 JSON 序列化後才提交，防止非標準物件進入本機交易台帳。
+ return {journal:clean,images:pictures};
+}
+async function storePreparedImages(pictures){
+ if(!pictures.length)return;
+ const d=await imageDB();
+ await new Promise((resolve,reject)=>{
+  const tx=d.transaction('images','readwrite');
+  const os=tx.objectStore('images');
+  for(const picture of pictures)os.add(picture); // 單一 IDB 交易：任何圖片寫入失敗，全部回滾。
+  tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error||Error('圖片資料庫匯入失敗'));
+  tx.onabort=()=>reject(tx.error||Error('圖片資料庫交易已中止'));
+ });
+}
+function installPreparedImport(journal){
+ if(!validate(journal))throw Error('準備提交的交易日誌資料格式不符');
+ db=journal;journalWarning='';render();
+}
+// 相容保留：單獨匯入交易日誌時也先檢核，建議從工作台「匯入備份」走完整回滾程序。
+async function importBackup(value){
+ const prepared=prepareBackupImport(value),before=structuredClone(db);
+ await storePreparedImages(prepared.images);
+ db=prepared.journal;
+ if(!save()){db=before;throw Error(journalWarning);}
+ render();
+}
 function getState(){return structuredClone(db);}
 function boot(opt){api=opt;for(const t of ['current','history','research'])$('journalTab'+t).addEventListener('click',()=>{activeTab=t;render();});$('journalAddTrade').addEventListener('click',recordTrade);$('journalUndoTrade').addEventListener('click',undoLastTrade);$('journalPreviewBtn').addEventListener('click',showPreview);$('journalSaveCard').addEventListener('click',addCard);$('journalSearch').addEventListener('input',renderHistory);$('journalUpload').addEventListener('click',importScreenshot);$('journalShowBtn').addEventListener('click',showJournal);$('journalSection').addEventListener('click',e=>{const h=e.target.closest('[data-open-history]');if(h){selectedHistory=h.dataset.openHistory;renderHistory();}const view=e.target.closest('[data-view-media]');if(view)showImage(view.dataset.viewMedia);
  const corrected=e.target.closest('[data-correct-trade]');if(corrected)correctTradeDate(corrected.dataset.correctTrade);const archived=e.target.closest('[data-archive-media]');if(archived)archiveMedia(archived.dataset.archiveMedia);
  const restored=e.target.closest('[data-restore-media]');if(restored)restoreMedia(restored.dataset.restoreMedia);
  const replaced=e.target.closest('[data-replace-media]');if(replaced)replaceMedia(replaced.dataset.replaceMedia);});$('journalDate').value=today();render();}
-window.StockJournal={init:boot,render,exportBackup,importBackup,getState,hasActiveRound:stockId=>db.rounds.some(r=>r.stockId===stockId&&r.status==='open')};
+window.StockJournal={init:boot,render,exportBackup,importBackup,prepareBackupImport,storePreparedImages,installPreparedImport,getState,hasActiveRound:stockId=>db.rounds.some(r=>r.stockId===stockId&&r.status==='open')};
 })();

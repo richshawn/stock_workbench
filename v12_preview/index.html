@@ -99,6 +99,19 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
 
 <script src="./excel_export.js"></script>
 <script src="./refresh_config.js"></script>
+<script>
+// V1.2 安全匯入復原護欄：若上次匯入在寫入三份文字資料的中途中斷，先還原舊值再載入模組。
+(()=>{
+ const markerKey='tw-stock-workbench-import-guard-v1-preview';
+ try{
+  const raw=localStorage.getItem(markerKey);if(!raw)return;
+  const mark=JSON.parse(raw),keys=['tw-stock-workbench-v2-preview','tw-stock-workbench-stops-v1-preview','tw-stock-workbench-journal-v1-preview'];
+  if(mark?.version!==1||!mark.old||!keys.every(k=>Object.prototype.hasOwnProperty.call(mark.old,k)))throw Error('復原資訊不完整');
+  for(const k of keys){if(mark.old[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,mark.old[k]);}
+  localStorage.removeItem(markerKey);window.__v12RecoveredImport=true;
+ }catch(e){window.__v12ImportBlocked=true;alert('⚠ 上次備份匯入中斷，本機資料未能自動還原。請勿繼續操作；請保留原備份並回報：'+e.message);}
+})();
+</script>
 <script src="./stop_module.js"></script>
 <script src="./journal_module.js"></script>
 <script>
@@ -174,7 +187,62 @@ function renderAll(){renderList();renderDetail();renderPercent();renderSim();ren
 function exportBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 async function exportBackup(){const journal=await window.StockJournal.exportBackup();const stamp=new Date().toLocaleDateString('sv-SE');exportBlob(new Blob([JSON.stringify({...state,stopSettings:window.StockStops.exportState(),tradeJournal:journal,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'}),`持股工作台_備份_${stamp}.json`);toast('已匯出 JSON 備份。請妥善保管交易資料。');}
 function exportCsv(){const row=(items)=>items.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',');const lines=[row(['代號','股名','市場','商品類型','累積股數','持有總成本','加權均價','參考股價','帳面損益','損益率'])];for(const s of state.stocks){const h=holding(s),ref=n(s.reference),pnl=h.qty&&ref>0?h.qty*ref-h.cost:'';lines.push(row([s.code,s.name,s.market,s.kind,h.qty,h.cost,h.avg||'',s.reference,pnl,h.cost&&pnl!==''?pnl/h.cost:'']));}exportBlob(new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),'持股清單.csv');}
-async function importBackup(file){if(!file)return;if(file.size>150e6){toast('備份檔太大，請確認檔案。');return;}file.text().then(async t=>{let j;try{j=JSON.parse(t);}catch{throw Error('JSON 格式錯誤');}if(!j||j.version!==2||!Array.isArray(j.stocks)||j.stocks.length>200||!j.standalone||typeof j.standalone!=='object')throw Error('不是本工具的 v2 備份檔');if(!j.stocks.every(s=>s&&typeof s.code==='string'&&Array.isArray(s.buys)&&s.buys.length<=50&&typeof s.id==='string'))throw Error('交易紀錄結構不符');if(!j.tradeJournal&&window.StockJournal.getState().rounds.length)throw Error('此為沒有交易台帳的舊版備份，但目前瀏覽器已存在 V1.2 交易輪次。為避免股權資料與歷史交易不一致，請先在乾淨的獨立測試環境匯入；原資料未修改。');if(!confirm(`將以備份中的 ${j.stocks.length} 檔股票覆蓋目前資料，確定匯入？（建議先匯出原資料）`))return;state={version:2,selected:j.selected,stocks:j.stocks,standalone:j.standalone};if(j.stopSettings)window.StockStops.importState(j.stopSettings);if(j.tradeJournal){await window.StockJournal.importBackup(j.tradeJournal);}else if(window.StockJournal.getState().rounds.length){alert('舊版備份沒有交易日誌，已保留此瀏覽器既有的 V1.2 交易歷史。請核對持股是否一致。');}if(!current())state.selected=state.stocks[0]?.id||null;save();renderAll();toast('備份已匯入，股票及交易紀錄已恢復。');}).catch(e=>toast('匯入失敗：'+e.message)).finally(()=>$('importFile').value='');}
+// 完整預檢 → 將圖片寫入新的 ID → 保存復原標記 → 提交三組文字資料 → 解除標記。
+// 不會覆蓋任何既有圖片。中斷重開時，由模組載入前的復原護欄還原舊文字資料。
+let importBusy=false;
+async function importBackup(file){
+ if(!file||importBusy)return;
+ const markerKey='tw-stock-workbench-import-guard-v1-preview';
+ const mainKey=KEY,stopKey='tw-stock-workbench-stops-v1-preview',journalKey='tw-stock-workbench-journal-v1-preview';
+ const keys=[mainKey,stopKey,journalKey];
+ let markSaved=false,oldValues=null,oldMemory=null;
+ function restoreOld(){
+  if(!oldValues)return;
+  for(const k of keys){if(oldValues[k]===null)localStorage.removeItem(k);else localStorage.setItem(k,oldValues[k]);}
+  localStorage.removeItem(markerKey);markSaved=false;
+  if(oldMemory){state=oldMemory.main;window.StockStops.applyPreparedState(oldMemory.stops);window.StockJournal.installPreparedImport(oldMemory.journal);renderAll();}
+ }
+ importBusy=true;
+ try{
+  if(window.__v12ImportBlocked||localStorage.getItem(markerKey))throw Error('先前匯入尚未復原，請先處理復原警示');
+  if(file.size>150e6)throw Error('備份檔超過 150 MB 上限');
+  let j;try{j=JSON.parse(await file.text());}catch{throw Error('JSON 格式錯誤');}
+  if(!j||j.version!==2||!Array.isArray(j.stocks)||j.stocks.length>200||!j.standalone||typeof j.standalone!=='object'||Array.isArray(j.standalone))throw Error('不是本工具的 v2 備份檔');
+  if(!j.stocks.every(s=>s&&typeof s.code==='string'&&typeof s.id==='string'&&Array.isArray(s.buys)&&s.buys.length<=50))throw Error('持股資料結構不符');
+  if(new Set(j.stocks.map(s=>s.id)).size!==j.stocks.length)throw Error('股票 ID 重複');
+  const priorJournal=window.StockJournal.getState();
+  if(!j.tradeJournal&&(priorJournal.rounds.length||priorJournal.cards.length||priorJournal.media.length))throw Error('舊版備份缺少交易台帳，但目前已有 V1.2 歷史資料。請在空白測試環境匯入；原資料未改變。');
+  if(j.stopSettings!==undefined&&(!j.stopSettings||typeof j.stopSettings!=='object'||Array.isArray(j.stopSettings)))throw Error('停利設定格式不正確');
+  const nextMain={version:2,selected:j.selected,stocks:j.stocks,standalone:j.standalone};
+  if(!nextMain.stocks.some(s=>s.id===nextMain.selected))nextMain.selected=nextMain.stocks[0]?.id||null;
+  const nextStops=j.stopSettings||{};
+  const nextJournal=j.tradeJournal?window.StockJournal.prepareBackupImport(j.tradeJournal):
+   {journal:{version:1,rounds:[],cards:[],media:[]},images:[]};
+  // 預先序列化，避免真正寫入到一半才發現資料格式或容量問題。
+  const nextRaw={
+   [mainKey]:JSON.stringify(nextMain),
+   [stopKey]:JSON.stringify(nextStops),
+   [journalKey]:JSON.stringify(nextJournal.journal)
+  };
+  if(!confirm(`安全匯入檢查通過：${nextMain.stocks.length} 檔股票、${nextJournal.journal.rounds.length} 輪交易、${nextJournal.images.length} 張圖片。\n\n匯入會取代目前 V1.2 的持股、停利設定及交易台帳。已先另存 JSON 備份嗎？`))return;
+  oldValues=Object.fromEntries(keys.map(k=>[k,localStorage.getItem(k)]));
+  oldMemory={main:state,stops:window.StockStops.exportState(),journal:priorJournal};
+  // 新圖使用新 ID，一張失敗則整批圖片都不寫入；舊圖不會被覆蓋。
+  await window.StockJournal.storePreparedImages(nextJournal.images);
+  // 備份原有文字資料供重新整理後自動恢復；容量不足便中止，不覆蓋任何原文字資料。
+  localStorage.setItem(markerKey,JSON.stringify({version:1,old:oldValues}));markSaved=true;
+  for(const k of keys)localStorage.setItem(k,nextRaw[k]);
+  state=nextMain;
+  window.StockStops.applyPreparedState(nextStops);
+  window.StockJournal.installPreparedImport(nextJournal.journal);
+  renderAll();
+  localStorage.removeItem(markerKey);markSaved=false;
+  toast('✅ 安全匯入完成；請核對股數、停利基準、交易歷史及圖片。');
+ }catch(e){
+  if(markSaved){try{restoreOld();}catch(recoveryError){window.__v12ImportBlocked=true;alert('⚠ 回復失敗，請先重新整理網頁讓安全護欄復原；勿再輸入交易。'+recoveryError.message);return;}}
+  alert('⚠ 匯入未完成：'+e.message+'。既有交易資料未被取代；請保留備份。');
+ }finally{importBusy=false;$('importFile').value='';}
+}
 function loadDemo(){if(state.stocks.length&&!confirm('示範資料會新增一檔 2330（不覆蓋現有股票）。繼續？'))return;const prior=state.stocks.find(s=>s.code==='2330');if(prior){state.selected=prior.id;renderAll();setView('detail');toast('已切換現有 2330，不會覆蓋你的資料。');return;}const s=newStock('2330','台積電','上市','stock');s.reference='1025';s.buys=[{price:'900',qty:'1000'},{price:'920',qty:'500'},{price:'950',qty:'500'},{price:'980',qty:'500'},{price:'1000',qty:'500'}];state.stocks.push(s);state.selected=s.id;save();renderAll();setView('detail');toast('已載入示範：持股 3,000 股、成本 2,825,000 元、均價 941.67 元。');}
 $('addStockBtn').addEventListener('click',create);$('lookupBtn').addEventListener('click',()=>{const found=queryCode();if(found)toast(`${found.code} ${found.name}（${found.market}）`);else toast('目前無法辨識股名，可先新增代號，再在右側手動輸入股名。');});$('stockCode').addEventListener('input',queryCode);$('stockCode').addEventListener('keydown',e=>{if(e.key==='Enter')create();});
 $('stockRows').addEventListener('click',e=>{const del=e.target.closest('[data-delete]');if(del){e.stopPropagation();const s=state.stocks.find(x=>x.id===del.dataset.delete);if(!s)return;if(!confirm(`刪除 ${s.code} ${s.name||''}，包含全部交易紀錄？（建議先匯出備份）`))return;state.stocks=state.stocks.filter(x=>x.id!==s.id);if(state.selected===s.id)state.selected=state.stocks[0]?.id||null;save();renderAll();return;}const tr=e.target.closest('[data-stock-id]');if(!tr)return;state.selected=tr.dataset.stockId;save();renderAll();setView('detail');});$('stockRows').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr[data-stock-id]')){e.preventDefault();e.target.click();}});
