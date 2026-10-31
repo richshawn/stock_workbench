@@ -140,7 +140,7 @@ function render(s,h){const panel=$('stopSection');if(!panel)return;panel.classLi
 }
 function listQuote(s,h){const q=quote(s);if(!q)return '盤後價：尚未取得';const price=`${fmt(Number(q.price))} 元｜${q.tradeDate} ${q.quoteType==='daily_average'?'成交均價':'收盤'}`;if(!h||!h.qty)return price;const v=stops(h.cost/h.qty,Number(q.price),s.kind);return `${price}｜A ${fmt(v.ea)}／B ${fmt(v.eb)}`;}
 async function load(force=false){loadMessage='更新盤後快照中…';const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),13000);
- try{const qs=force?`?t=${Date.now()}`:'';const [x,y]=await Promise.all(['../data/quotes_latest.json','../data/quotes_history.json'].map(async src=>{const resp=await fetch(src+qs,{cache:'no-store',signal:controller.signal});if(!resp.ok)throw Error('HTTP '+resp.status);return resp.json()}));if(!x?.items||!y?.series)throw Error('資料檔結構不完整');latest=x;hist=y;loadMessage=x.updatedAt?'已載入官方盤後快照；不同市場更新可能不同步':'等待第一次盤後同步';}
+ try{const qs=force?`?t=${Date.now()}`:'';const [x,y]=await Promise.all(['./data/quotes_latest.json','./data/quotes_history.json'].map(async src=>{const resp=await fetch(src+qs,{cache:'no-store',signal:controller.signal});if(!resp.ok)throw Error('HTTP '+resp.status);return resp.json()}));if(!x?.items||!y?.series)throw Error('資料檔結構不完整');latest=x;hist=y;loadMessage=x.updatedAt?'已載入官方盤後快照；不同市場更新可能不同步':'等待第一次盤後同步';}
  catch(e){loadMessage='盤後來源暫不可用；不進行停利觸發';console.warn('Official EOD unavailable',e);}
  finally{clearTimeout(timeout);if(updateCallback)updateCallback();}
 }
