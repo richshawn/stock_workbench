@@ -52,7 +52,7 @@ button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:no
  <section class="section-box"><div class="section-top">▣ 分批買進紀錄（預設 5 筆）</div><div class="purchase-wrap"><table class="purchase-table"><colgroup><col style="width:12%"><col style="width:30%"><col style="width:25%"><col style="width:24%"><col style="width:9%"></colgroup><thead><tr><th>序</th><th>價格（元）</th><th>股數</th><th>投入成本</th><th>刪</th></tr></thead><tbody id="purchaseRows"></tbody></table><div class="tools-row"><button class="btn primary small" id="xlsxDetailBtn">▤ 匯出含公式 Excel</button><button class="btn soft small" id="addPurchaseBtn">＋ 增加一筆</button><button class="btn ghost small" id="resetPurchaseBtn">清空買進資料</button></div><p class="section-note" id="purchaseWarning"></p>
  <div id="whatIfArea" class="whatif-area hide" aria-label="假設加碼成本試算">
   <h3>🧮 假設加碼試算 <small>只試算、不記帳</small></h3>
-  <p class="whatif-note">上方已記錄的持股維持唯讀；以下是假設未來買進的價格與股數。試算不改變實際持股、交易台帳、A／B 停利基準或已實現損益。</p>
+  <p class="whatif-note">尚未持股可先試算首次建倉；已有持股則可試算後續加碼。這些假設交易不會改變實際持股、交易台帳、A／B 停利基準或已實現損益。</p>
   <div class="purchase-wrap"><table class="purchase-table whatif-table"><colgroup><col style="width:12%"><col style="width:30%"><col style="width:25%"><col style="width:24%"><col style="width:9%"></colgroup><thead><tr><th>序</th><th>假設買價（元）</th><th>假設股數</th><th>預計投入成本</th><th>刪</th></tr></thead><tbody id="whatIfRows"></tbody></table></div>
   <div class="tools-row"><button class="btn soft small" type="button" id="whatIfAdd">＋ 增加一筆假設</button><button class="btn ghost small" type="button" id="whatIfClear">清空假設</button></div>
   <div id="whatIfTotals" class="whatif-totals" aria-live="polite"></div>
@@ -200,11 +200,12 @@ function renderWhatIfRows(s){
  $('whatIfRows').innerHTML=rows.map((b,i)=>`<tr><td>${i+1}</td><td><input aria-label="假設第${i+1}筆買進價格" data-what-if-row="${i}" data-what-if-key="price" type="number" min="0.01" step="any" inputmode="decimal" placeholder="假設買價" value="${html(b.price??'')}"></td><td><input aria-label="假設第${i+1}筆買進股數" data-what-if-row="${i}" data-what-if-key="qty" type="number" min="1" step="1" inputmode="numeric" placeholder="假設股數" value="${html(b.qty??'')}"></td><td id="whatIfCost${i}">—</td><td><button type="button" class="icon-btn" data-what-if-remove="${i}" aria-label="清空假設第${i+1}筆">×</button></td></tr>`).join('');
  $('whatIfAdd').disabled=rows.length>=50;
 }
-function renderWhatIf(){const s=current();if(!s)return;const totals=whatIfTotals(s),show=totals.base.qty>0;
- $('whatIfArea').classList.toggle('hide',!show);if(!show)return;
+function renderWhatIf(){const s=current();if(!s)return;const totals=whatIfTotals(s);
+ // 只要選取股票就顯示：0 股時試算建倉，有持股時試算加碼。
+ $('whatIfArea').classList.remove('hide');
  const {base,extraQty,extraCost,qty,cost,avg,incomplete}=totals;
  $('whatIfTotals').innerHTML=`<div class="whatif-total"><small>實際持股｜不變</small><strong>${fmt(base.qty,0)} 股 · 均價 ${base.qty?fmt(base.avg):'—'} 元</strong><small>總成本 ${money(base.cost)}</small></div>`+
- `<div class="whatif-total"><small>假設再買｜未成交</small><strong>${fmt(extraQty,0)} 股 · ${money(extraCost)}</strong><small>不列入實際持股</small></div>`+
+ `<div class="whatif-total"><small>${base.qty>0?'假設再買':'假設建倉'}｜未成交</small><strong>${fmt(extraQty,0)} 股 · ${money(extraCost)}</strong><small>不列入實際持股</small></div>`+
  `<div class="whatif-total final"><small>假設合計｜試算結果</small><strong>${fmt(qty,0)} 股 · 均價 ${qty?fmt(avg):'—'} 元</strong><small>合計成本 ${money(cost)}${base.qty&&extraQty?` · 均價變化 ${signed(avg-base.avg)} 元`:''}</small></div>`;
  $('whatIfWarning').textContent=incomplete?`⚠ ${incomplete} 筆假設價格或股數未填完整，暫不計入試算。`:'只計算買進價乘股數，未加計手續費。正式買賣請至下方「新增成交事件」登錄。';
  ensureWhatIf(s).forEach((b,i)=>{const el=$('whatIfCost'+i),price=n(b.price),q=n(b.qty);if(el)el.textContent=price>0&&Number.isInteger(q)&&q>0?money(price*q):'—';});
